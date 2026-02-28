@@ -1,5 +1,5 @@
 {
-  "name": "ewing-skills",
+  "name": "notion-skills",
   "owner": {
     "name": "EwingYangs"
   },
@@ -13,6 +13,13 @@
       "source": "./",
       "strict": false,
       "skills": ["./notion-clipper-skill"]
+    },
+    {
+      "name": "notion-market-publish-skill",
+      "description": "Publish Notion templates to the Notion template marketplace",
+      "source": "./",
+      "strict": false,
+      "skills": ["./notion-market-publish-skill"]
     }
   ]
 }
