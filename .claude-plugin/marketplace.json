@@ -1,0 +1,18 @@
+{
+  "name": "ewing-skills",
+  "owner": {
+    "name": "EwingYangs"
+  },
+  "metadata": {
+    "description": "Personal skills for Claude Code: clip web pages to Notion, and more."
+  },
+  "plugins": [
+    {
+      "name": "notion-clipper-skill",
+      "description": "Clip web pages to Notion database via Chrome CDP",
+      "source": "./",
+      "strict": false,
+      "skills": ["./notion-clipper-skill"]
+    }
+  ]
+}

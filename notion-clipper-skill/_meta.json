@@ -1,0 +1,5 @@
+{
+  "name": "notion-clipper-skill",
+  "version": "1.0.0",
+  "description": "Clip web pages to Notion using Chrome CDP and martian library"
+}
