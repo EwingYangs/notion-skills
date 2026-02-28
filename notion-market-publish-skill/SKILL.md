@@ -28,15 +28,27 @@ Ask the user for:
 3. **Price in JPY** (optional) - For paid templates
 4. **Stripe product ID** (optional) - For paid templates
 
-### Step 2: Get Template Title
+### Step 2: Get Template Content
 
-Use the script to fetch the template title from Notion API:
+Use the script to fetch the template title and page content from Notion API:
 
 ```bash
-python scripts/notion_api.py get-title <template_url>
+python scripts/notion_api.py get-content <template_url>
 ```
 
-This returns JSON: `{"title": "知識庫管理系統"}`
+This returns JSON with the title, sub-page names, headings, and paragraphs:
+
+```json
+{
+  "title": "知識庫管理系統",
+  "subpages": ["📥 收件匣", "🗂️ 資料庫", "📝 每日筆記"],
+  "headings": [
+    {"level": 2, "text": "功能特色"},
+    {"level": 2, "text": "使用方式"}
+  ],
+  "paragraphs": ["這是一個全功能的知識管理系統..."]
+}
+```
 
 ### Step 3: AI Analysis and Generation
 
@@ -56,11 +68,11 @@ This returns JSON: `{"title": "知識庫管理系統"}`
    - Example: "知識庫管理系統" → "knowledge-base-management-system-1234"
 
 3. **Select Categories** - Read `category.json` and select top 3 most relevant categories:
-   - Analyze title and purpose
+   - Analyze title, subpages, and headings for full context
    - Match with category names and descriptions
    - Return 3 `contentful_id` values
 
-4. **Generate Emoji** - Choose appropriate emoji based on title:
+4. **Generate Emoji** - Choose appropriate emoji based on title and content:
    - 📚 for knowledge/learning
    - 📝 for notes/content
    - 🎨 for creative/design
@@ -68,10 +80,11 @@ This returns JSON: `{"title": "知識庫管理系統"}`
    - 📊 for projects/data
    - etc.
 
-5. **Generate Descriptions**:
-   - **shortDescription**: 1-2 sentences describing the template
-   - **longDescription**: Detailed description with features/modules
+5. **Generate Descriptions** (use title + subpages + headings + paragraphs as context):
+   - **shortDescription**: 1-2 sentences describing the template's core purpose, informed by actual page structure
+   - **longDescription**: Detailed description listing key features/modules derived from subpage names and headings
    - Use the detected locale's language for descriptions
+   - Example: if subpages are ["📥 收件匣", "🗂️ 資料庫", "📝 每日筆記"], mention these as actual features
 
 ### Step 4: Create Stripe Payment Link (If Paid)
 

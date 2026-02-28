@@ -42,6 +42,8 @@ def get_user_id() -> str:
 
 def extract_page_id(url: str) -> str:
     """Extract page ID from Notion URL"""
+    # Strip query string and fragment before parsing
+    url = url.split('?')[0].split('#')[0]
     parts = url.rstrip('/').split('/')
     page_id = parts[-1].split('-')[-1] if '-' in parts[-1] else parts[-1]
     if len(page_id) == 32:
@@ -64,6 +66,103 @@ def get_page_title(page_id: str, api_key: str) -> str:
     title_prop = page_info.get("properties", {}).get("title", {})
     title = title_prop.get("title", [{}])[0].get("plain_text", "Untitled")
     return title
+
+
+def get_rich_text(rich_text_list: list) -> str:
+    """Extract plain text from Notion rich_text array"""
+    return "".join(t.get("plain_text", "") for t in rich_text_list)
+
+
+def fetch_blocks(block_id: str, headers: dict) -> List[dict]:
+    """Fetch child blocks of a given block_id"""
+    response = requests.get(
+        f"https://api.notion.com/v1/blocks/{block_id}/children",
+        headers=headers,
+        params={"page_size": 100}
+    )
+    if not response.ok:
+        return []
+    return response.json().get("results", [])
+
+
+def extract_blocks_content(blocks: List[dict], headers: dict, depth: int,
+                           subpages: list, headings: list, paragraphs: list,
+                           databases: list) -> None:
+    """Recursively extract meaningful content from blocks up to given depth"""
+    for block in blocks:
+        block_type = block.get("type")
+        block_content = block.get(block_type, {})
+
+        if block_type == "child_page":
+            title = block_content.get("title", "")
+            if title:
+                subpages.append(title)
+
+        elif block_type == "child_database":
+            title = block_content.get("title", "")
+            if title:
+                databases.append(title)
+
+        elif block_type in ("heading_1", "heading_2", "heading_3"):
+            text = get_rich_text(block_content.get("rich_text", []))
+            if text:
+                headings.append({"level": int(block_type[-1]), "text": text})
+
+        elif block_type in ("paragraph", "callout", "quote"):
+            text = get_rich_text(block_content.get("rich_text", []))
+            if text and len(paragraphs) < 8:
+                paragraphs.append(text)
+
+        elif block_type in ("bulleted_list_item", "numbered_list_item", "to_do"):
+            text = get_rich_text(block_content.get("rich_text", []))
+            if text and len(paragraphs) < 8:
+                paragraphs.append(text)
+
+        # Recurse into container blocks
+        if depth > 0 and block.get("has_children"):
+            if block_type in ("column_list", "column", "toggle", "callout",
+                              "bulleted_list_item", "numbered_list_item", "quote",
+                              "synced_block", "template"):
+                children = fetch_blocks(block.get("id"), headers)
+                extract_blocks_content(children, headers, depth - 1,
+                                       subpages, headings, paragraphs, databases)
+
+
+def get_page_content(page_id: str, api_key: str) -> Dict[str, Any]:
+    """Get page title and child block content from Notion API for AI description generation"""
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Notion-Version": "2022-06-28",
+        "Content-Type": "application/json"
+    }
+
+    # Fetch page title
+    response = requests.get(f"https://api.notion.com/v1/pages/{page_id}", headers=headers)
+    response.raise_for_status()
+    page_info = response.json()
+    title_prop = page_info.get("properties", {}).get("title", {})
+    title = title_prop.get("title", [{}])[0].get("plain_text", "Untitled")
+
+    # Fetch child blocks (first level)
+    top_blocks = fetch_blocks(page_id, headers)
+
+    subpages = []
+    headings = []
+    paragraphs = []
+    databases = []
+
+    # Recursively extract content up to 3 levels deep
+    extract_blocks_content(top_blocks, headers, depth=3,
+                           subpages=subpages, headings=headings,
+                           paragraphs=paragraphs, databases=databases)
+
+    return {
+        "title": title,
+        "subpages": subpages,
+        "databases": databases,
+        "headings": headings,
+        "paragraphs": paragraphs
+    }
 
 
 def upload_image(image_path: Path, cookies: str, user_id: str) -> Dict[str, Any]:
@@ -191,6 +290,7 @@ def main():
     if len(sys.argv) < 2:
         print("Usage:")
         print("  Get title: python script.py get-title <template_url>")
+        print("  Get content: python script.py get-content <template_url>")
         print("  Upload images: python script.py upload-images <image_dir> [cookies] [user_id]")
         print("  Submit: python script.py submit '<data_json>' [cookies] [user_id]")
         print("\nNote: If cookies and user_id are not provided, they will be read from ~/.config/notion/")
@@ -208,6 +308,17 @@ def main():
         page_id = extract_page_id(template_url)
         title = get_page_title(page_id, api_key)
         print(json.dumps({"title": title}, ensure_ascii=False))
+
+    elif command == "get-content":
+        if len(sys.argv) < 3:
+            print("Usage: python script.py get-content <template_url>")
+            sys.exit(1)
+
+        template_url = sys.argv[2]
+        api_key = get_notion_api_key()
+        page_id = extract_page_id(template_url)
+        content = get_page_content(page_id, api_key)
+        print(json.dumps(content, ensure_ascii=False, indent=2))
 
     elif command == "upload-images":
         if len(sys.argv) < 3:
